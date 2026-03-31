@@ -1,0 +1,44 @@
+[
+  {
+    "name": "exp_01_baseline",
+    "note": "Standard hyperparameters for 300k steps",
+    "timesteps": 300000,
+    "learning_rate": 1e-4,
+    "buffer_size": 50000,
+    "learning_starts": 10000,
+    "batch_size": 64,
+    "gamma": 0.99,
+    "train_freq": 4,
+    "target_update_interval": 1000,
+    "exploration_fraction": 0.15,
+    "exploration_final_eps": 0.01
+  },
+  {
+    "name": "exp_02_high_lr",
+    "note": "Testing a higher learning rate for faster convergence",
+    "timesteps": 300000,
+    "learning_rate": 5e-4,
+    "buffer_size": 50000,
+    "learning_starts": 10000,
+    "batch_size": 64,
+    "gamma": 0.99,
+    "train_freq": 4,
+    "target_update_interval": 1000,
+    "exploration_fraction": 0.15,
+    "exploration_final_eps": 0.01
+  },
+  {
+    "name": "exp_03_long_exploration",
+    "note": "Decaying epsilon over 50% of the run instead of 15%",
+    "timesteps": 300000,
+    "learning_rate": 1e-4,
+    "buffer_size": 50000,
+    "learning_starts": 10000,
+    "batch_size": 64,
+    "gamma": 0.99,
+    "train_freq": 4,
+    "target_update_interval": 1000,
+    "exploration_fraction": 0.50,
+    "exploration_final_eps": 0.01
+  }
+]
