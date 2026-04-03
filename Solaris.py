@@ -31,6 +31,11 @@ Usage
   python -m tensorboard.main --logdir logs/solaris/sweep --port 6006
   # Then open http://localhost:6006
 
+  # Hyperparameter tuning with Optuna
+  python Solaris.py --mode tune --n-trials 50 --sampler tpe
+  # This runs 50 trials of Optuna optimization using the TPE sampler (Bayesian optimization).
+  # The best config is appended to sweep_configs.json so you can easily run it with --mode train or include it in future sweeps.
+
 Trying a different Atari game
 ------------------------------
   Change the ENV_ID constant below. Example values:
@@ -49,10 +54,12 @@ import json
 import os
 import shutil
 from pathlib import Path
+import datetime
 
 import numpy as np
 import ale_py
 import gymnasium as gym
+import optuna
 
 gym.register_envs(ale_py)  # register ALE environments in the gymnasium namespace
 
@@ -78,6 +85,7 @@ SEEDS_FILE = SEEDS_DIR / "experiment_seeds.json"
 
 def set_global_seed(seed: int) -> None:
     """Set all relevant random seeds for reproducibility."""
+
     import random
     import torch
 
@@ -90,6 +98,7 @@ def set_global_seed(seed: int) -> None:
 
 def record_seed(experiment_name: str, seed: int, note: str | None = None) -> None:
     """Record used seed(s) for each experiment in seeds/experiment_seeds.json."""
+
     SEEDS_DIR.mkdir(parents=True, exist_ok=True)
 
     if SEEDS_FILE.exists():
@@ -542,9 +551,9 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--mode", choices=["train", "play", "inspect", "sweep"], required=True,
+        "--mode", choices=["train", "play", "inspect", "sweep", "tune"], required=True,
         help="'train' single run, 'play' watch agent, 'inspect' print params, "
-             "'sweep' run all experiments from --sweep-file.",
+             "'sweep' run all experiments from --sweep-file, 'tune' run Optuna optimization.",
     )
     parser.add_argument(
         "--sweep-file", default="sweep_configs.json",
@@ -572,6 +581,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tensorboard-log", default="logs/solaris",
         help="Directory for TensorBoard logs.",
+    )
+    parser.add_argument(
+        "--n-trials", type=int, default=100,
+        help="Number of Optuna trials for tuning mode.",
+    )
+    parser.add_argument(
+        "--sampler", choices=["tpe", "random"], default="tpe",
+        help="Optuna sampler for tuning: 'tpe' for TPESampler, 'random' for RandomSampler.",
     )
     return parser.parse_args()
 
@@ -634,9 +651,143 @@ def main():
             best_model_path=args.model_path,
         )
 
+    elif args.mode == "tune":
+        if args.sampler == "tpe":
+            sampler = optuna.samplers.TPESampler()
+        elif args.sampler == "random":
+            sampler = optuna.samplers.RandomSampler()
+        else:
+            raise ValueError(f"Unknown sampler: {args.sampler}")
+
+        tuner = SolarisHyperparameterTuner(sampler=sampler)
+        print(f"Starting Optuna optimization with {args.sampler} sampler for {args.n_trials} trials...")
+        tuner.optimize(n_trials=args.n_trials)
+        tuner.save_to_sweep_config(filepath=args.sweep_file)
+        print(f"Optimization complete. Best config appended to {args.sweep_file}")
+
     else:
         inspect_model(model_path=args.model_path)
 
 
+class SolarisHyperparameterTuner:
+    """Hyperparameter tuner for DQN agent in ALE/Solaris-v5 using Optuna."""
+
+    def __init__(self, sampler=None):
+        """Initialize the tuner with an Optuna sampler.
+
+        Args:
+            sampler: Optuna sampler (e.g., optuna.samplers.TPESampler()). 
+                     Defaults to TPESampler if None.
+        """
+        if sampler is None:
+            self.sampler = optuna.samplers.TPESampler()
+        else:
+            self.sampler = sampler
+        self.study = None
+        self.best_trial = None
+
+    def _objective(self, trial):
+        """Objective function for Optuna optimization."""
+        # Suggest hyperparameters
+        learning_rate = trial.suggest_float("learning_rate", 1e-5, 5e-4, log=True)
+        buffer_size = trial.suggest_categorical("buffer_size", [10000, 50000, 100000])
+        learning_starts = trial.suggest_int("learning_starts", 1000, 20000)
+        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+        gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.98, 0.99, 0.995])
+        train_freq = trial.suggest_int("train_freq", 1, 8)
+        target_update_interval = trial.suggest_int("target_update_interval", 500, 5000)
+        exploration_fraction = trial.suggest_float("exploration_fraction", 0.1, 0.3)
+        exploration_final_eps = trial.suggest_float("exploration_final_eps", 0.001, 0.05)
+
+        # Build hparams dict
+        hparams = {
+            "env_id": ENV_ID,
+            "learning_rate": learning_rate,
+            "buffer_size": buffer_size,
+            "learning_starts": learning_starts,
+            "batch_size": batch_size,
+            "gamma": gamma,
+            "train_freq": train_freq,
+            "target_update_interval": target_update_interval,
+            "exploration_fraction": exploration_fraction,
+            "exploration_final_eps": exploration_final_eps,
+            "timesteps": 300000,
+            "seed": 42,  # Fixed seed for reproducibility
+        }
+
+        # Temporary paths for this trial
+        model_path = f"models/tune_trial_{trial.number}"
+        tensorboard_log = f"logs/tune/trial_{trial.number}"
+
+        # Train and get mean episode reward
+        reward = train_agent(
+            model_path=model_path,
+            timesteps=300000,
+            seed=42,
+            tensorboard_log=tensorboard_log,
+            hparams=hparams,
+        )
+
+        return reward
+
+    def optimize(self, n_trials=100):
+        """Run the hyperparameter optimization.
+
+        Args:
+            n_trials: Number of trials to run.
+        """
+        self.study = optuna.create_study(sampler=self.sampler, direction="maximize")
+        self.study.optimize(self._objective, n_trials=n_trials)
+        self.best_trial = self.study.best_trial
+
+    def get_best_config(self):
+        """Get the best hyperparameter configuration as a dict.
+
+        Returns:
+            Dict with the JSON structure for sweep_configs.json.
+        """
+        if self.best_trial is None:
+            raise ValueError("No optimization run yet. Call optimize() first.")
+
+        sampler_name = self.sampler.__class__.__name__.replace("Sampler", "").lower()
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        config = {
+            "name": f"exp_{sampler_name}_{timestamp}",
+            "note": f"Optimized via {sampler_name} for Solaris",
+            "timesteps": 300000,
+            "learning_rate": self.best_trial.params["learning_rate"],
+            "buffer_size": self.best_trial.params["buffer_size"],
+            "learning_starts": self.best_trial.params["learning_starts"],
+            "batch_size": self.best_trial.params["batch_size"],
+            "gamma": self.best_trial.params["gamma"],
+            "train_freq": self.best_trial.params["train_freq"],
+            "target_update_interval": self.best_trial.params["target_update_interval"],
+            "exploration_fraction": self.best_trial.params["exploration_fraction"],
+            "exploration_final_eps": self.best_trial.params["exploration_final_eps"],
+        }
+
+        return config
+
+    def save_to_sweep_config(self, filepath="sweep_configs.json"):
+        """Save the best config to the sweep_configs.json file.
+
+        Args:
+            filepath: Path to the JSON file.
+        """
+        config = self.get_best_config()
+
+        if os.path.exists(filepath):
+            with open(filepath, "r") as f:
+                data = json.load(f)
+        else:
+            data = []
+
+        data.append(config)
+
+        with open(filepath, "w") as f:
+            json.dump(data, f, indent=2)
+
+
 if __name__ == "__main__":
-    main()
+    main() 
