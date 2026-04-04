@@ -29,12 +29,21 @@ Usage
 
   # Monitor all sweep runs simultaneously in TensorBoard
   python -m tensorboard.main --logdir logs/solaris/sweep --port 6006
+
+  # Monitor the tuning runs in TensorBoard
+  python -m tensorboard.main --logdir logs/tune --port 6006
+
   # Then open http://localhost:6006
 
   # Hyperparameter tuning with Optuna
-  python Solaris.py --mode tune --n-trials 50 --sampler tpe
-  # This runs 50 trials of Optuna optimization using the TPE sampler (Bayesian optimization).
+  python Solaris.py --mode tune --n-trials 10 --sampler tpe
+  # This runs 10 trials of Optuna optimization using the TPE sampler (Bayesian optimization).
   # The best config is appended to sweep_configs.json so you can easily run it with --mode train or include it in future sweeps.
+
+  # Run replicates of the best config with random seeds
+  python Solaris.py --mode replicate --n-replicates 3
+  # This runs the best config from sweep_configs.json 3 times with different random seeds,
+  # recording each seed in experiment_seeds.json for reproducibility.
 
 Trying a different Atari game
 ------------------------------
@@ -55,6 +64,9 @@ import os
 import shutil
 from pathlib import Path
 import datetime
+
+import gc
+import torch
 
 import numpy as np
 import ale_py
@@ -395,6 +407,83 @@ def play_agent(model_path: str, episodes: int) -> None:
     env.close()
 
 
+def run_replicates(
+    sweep_path: str,
+    n_replicates: int,
+    base_log_dir: str,
+    model_base_path: str,
+) -> None:
+    """Run the best config from sweep_configs.json multiple times with different random seeds.
+
+    This is useful for validating the stability of the best hyperparameters found by Optuna.
+    Each replicate uses a random seed and records it in experiment_seeds.json.
+
+    Args:
+        sweep_path:      Path to the JSON file containing experiment configs.
+        n_replicates:    Number of times to run the best config.
+        base_log_dir:    Root TensorBoard log directory.
+        model_base_path: Base path for saving replicate models (without .zip).
+    """
+    with open(sweep_path) as f:
+        configs = json.load(f)
+
+    if not configs:
+        raise ValueError(f"No configs found in {sweep_path}")
+
+    # Assume the last config is the best (from Optuna)
+    best_config = configs[-1]
+    best_name = best_config["name"]
+
+    print(f"Running {n_replicates} replicates of best config: {best_name}")
+    print(f"  {best_config.get('note', '')}")
+    print(f"{'='*60}")
+
+    import random
+    for i in range(1, n_replicates + 1):
+        # Generate a random seed
+        replicate_seed = random.randint(0, 100000)
+
+        experiment_name = f"{best_name}_replicate_{i}"
+
+        print(f"Replicate {i}/{n_replicates}: {experiment_name} (seed={replicate_seed})")
+
+        # Build hparams dict
+        hparams = {
+            "env_id":                 ENV_ID,
+            "learning_rate":          best_config["learning_rate"],
+            "buffer_size":            best_config["buffer_size"],
+            "learning_starts":        best_config["learning_starts"],
+            "batch_size":             best_config["batch_size"],
+            "gamma":                  best_config["gamma"],
+            "train_freq":             best_config["train_freq"],
+            "target_update_interval": best_config["target_update_interval"],
+            "exploration_fraction":   best_config["exploration_fraction"],
+            "exploration_final_eps":  best_config["exploration_final_eps"],
+            "timesteps":              best_config["timesteps"],
+            "seed":                   replicate_seed,
+        }
+
+        model_path = f"{model_base_path}_replicate_{i}"
+        log_dir = f"{base_log_dir}/replicates/{experiment_name}"
+
+        record_seed(experiment_name, replicate_seed, note=best_config.get("note", ""))
+
+        print(f"  Seed {replicate_seed} recorded for {experiment_name}")
+
+        score = train_agent(
+            model_path=model_path,
+            timesteps=best_config["timesteps"],
+            seed=replicate_seed,
+            tensorboard_log=log_dir,
+            hparams=hparams,
+        )
+        print(f"  → final mean reward: {score:.2f}")
+
+    print(f"\n{'='*60}")
+    print(f"Replication complete. Models saved as {model_base_path}_replicate_1.zip etc.")
+    print(f"TensorBoard logs: {base_log_dir}/replicates/")
+
+
 # Sweep 
 
 def run_sweep(
@@ -551,9 +640,10 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--mode", choices=["train", "play", "inspect", "sweep", "tune"], required=True,
+        "--mode", choices=["train", "play", "inspect", "sweep", "tune", "replicate"], required=True,
         help="'train' single run, 'play' watch agent, 'inspect' print params, "
-             "'sweep' run all experiments from --sweep-file, 'tune' run Optuna optimization.",
+             "'sweep' run all experiments from --sweep-file, 'tune' run Optuna optimization, "
+             "'replicate' run best config from --sweep-file multiple times with random seeds.",
     )
     parser.add_argument(
         "--sweep-file", default="sweep_configs.json",
@@ -583,8 +673,8 @@ def parse_args() -> argparse.Namespace:
         help="Directory for TensorBoard logs.",
     )
     parser.add_argument(
-        "--n-trials", type=int, default=100,
-        help="Number of Optuna trials for tuning mode.",
+        "--n-replicates", type=int, default=3,
+        help="Number of replicates to run in replicate mode.",
     )
     parser.add_argument(
         "--sampler", choices=["tpe", "random"], default="tpe",
@@ -665,41 +755,47 @@ def main():
         tuner.save_to_sweep_config(filepath=args.sweep_file)
         print(f"Optimization complete. Best config appended to {args.sweep_file}")
 
+
+    elif args.mode == "replicate":
+        run_replicates(
+            sweep_path=args.sweep_file,
+            n_replicates=args.n_replicates,
+            base_log_dir=args.tensorboard_log,
+            model_base_path=args.model_path,
+        )
+
     else:
         inspect_model(model_path=args.model_path)
 
 
 class SolarisHyperparameterTuner:
-    """Hyperparameter tuner for DQN agent in ALE/Solaris-v5 using Optuna."""
+    """Memory-optimized Hyperparameter tuner for Solaris using Optuna."""
 
     def __init__(self, sampler=None):
-        """Initialize the tuner with an Optuna sampler.
-
-        Args:
-            sampler: Optuna sampler (e.g., optuna.samplers.TPESampler()). 
-                     Defaults to TPESampler if None.
-        """
-        if sampler is None:
-            self.sampler = optuna.samplers.TPESampler()
-        else:
-            self.sampler = sampler
+        # Default to TPESampler (Bayesian Optimization)
+        self.sampler = sampler or optuna.samplers.TPESampler()
+        # MedianPruner: Kills trials that perform worse than the median of previous runs
+        self.pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=10)
         self.study = None
         self.best_trial = None
 
     def _objective(self, trial):
-        """Objective function for Optuna optimization."""
-        # Suggest hyperparameters
-        learning_rate = trial.suggest_float("learning_rate", 1e-5, 5e-4, log=True)
-        buffer_size = trial.suggest_categorical("buffer_size", [10000, 50000, 100000])
-        learning_starts = trial.suggest_int("learning_starts", 1000, 20000)
+        """Objective function with memory safeguards."""
+        
+        learning_rate = trial.suggest_float("learning_rate",1e-5, 5e-4, log=True)
+        
+        # Buffer capped at 50k to prevent OOM on 16GB RAM
+        buffer_size = trial.suggest_categorical("buffer_size", [10000, 20000, 50000])
+        
         batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-        gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.98, 0.99, 0.995])
-        train_freq = trial.suggest_int("train_freq", 1, 8)
+        
+        learning_starts = trial.suggest_int("learning_starts", 1000, 20000)
+        gamma = trial.suggest_categorical("gamma", [0.95, 0.99, 0.995])
+        train_freq = trial.suggest_categorical("train_freq", [1, 4, 8])
         target_update_interval = trial.suggest_int("target_update_interval", 500, 5000)
         exploration_fraction = trial.suggest_float("exploration_fraction", 0.1, 0.3)
-        exploration_final_eps = trial.suggest_float("exploration_final_eps", 0.001, 0.05)
+        exploration_final_eps = trial.suggest_float("exploration_final_eps", 0.01, 0.05)
 
-        # Build hparams dict
         hparams = {
             "env_id": ENV_ID,
             "learning_rate": learning_rate,
@@ -712,49 +808,78 @@ class SolarisHyperparameterTuner:
             "exploration_fraction": exploration_fraction,
             "exploration_final_eps": exploration_final_eps,
             "timesteps": 300000,
-            "seed": 42,  # Fixed seed for reproducibility
+            "seed": 42 + trial.number, # Vary seed slightly per trial
         }
 
-        # Temporary paths for this trial
-        model_path = f"models/tune_trial_{trial.number}"
-        tensorboard_log = f"logs/tune/trial_{trial.number}"
+        # Paths
+        trial_name = f"trial_{trial.number}"
+        model_path = f"models/tune/{trial_name}"
+        tensorboard_log = f"logs/tune/{trial_name}"
 
-        # Train and get mean episode reward
-        reward = train_agent(
-            model_path=model_path,
-            timesteps=300000,
-            seed=42,
-            tensorboard_log=tensorboard_log,
-            hparams=hparams,
+        # Format hyperparameters for note
+        hparams_note = (
+            f"lr={learning_rate:.2e}, buffer={buffer_size}, batch={batch_size}, "
+            f"starts={learning_starts}, gamma={gamma}, train_freq={train_freq}, "
+            f"target_update={target_update_interval}, exp_frac={exploration_fraction:.2f}, "
+            f"exp_eps={exploration_final_eps:.2f}"
         )
+
+        # Record seed with hyperparameter summary
+        record_seed(trial_name, 42 + trial.number, note=hparams_note)
+
+        # --- 2. EXECUTION WITH CLEANUP ---
+        reward = 0.0
+        try:
+            reward = train_agent(
+                model_path=model_path,
+                timesteps=300000,
+                seed=42 + trial.number,
+                tensorboard_log=tensorboard_log,
+                hparams=hparams,
+            )
+        except Exception as e:
+            print(f"Trial {trial.number} failed due to: {e}")
+            return -9999.0 
+        finally:
+            gc.collect()
+            torch.cuda.empty_cache()
 
         return reward
 
-    def optimize(self, n_trials=100):
-        """Run the hyperparameter optimization.
-
-        Args:
-            n_trials: Number of trials to run.
-        """
-        self.study = optuna.create_study(sampler=self.sampler, direction="maximize")
-        self.study.optimize(self._objective, n_trials=n_trials)
+    def optimize(self, n_trials=30):
+        """Run optimization with pruning enabled."""
+        self.study = optuna.create_study(
+            sampler=self.sampler, 
+            pruner=self.pruner, 
+            direction="maximize"
+        )
+        self.study.optimize(self._objective, n_trials=n_trials, n_jobs=1)
         self.best_trial = self.study.best_trial
 
     def get_best_config(self):
-        """Get the best hyperparameter configuration as a dict.
-
-        Returns:
-            Dict with the JSON structure for sweep_configs.json.
-        """
+        """Formats the result for sweep_configs.json."""
         if self.best_trial is None:
-            raise ValueError("No optimization run yet. Call optimize() first.")
+            raise ValueError("No best trial found.")
 
-        sampler_name = self.sampler.__class__.__name__.replace("Sampler", "").lower()
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        config = {
-            "name": f"exp_{sampler_name}_{timestamp}",
-            "note": f"Optimized via {sampler_name} for Solaris",
+        # Get simplified sampler name (e.g. 'tpe' or 'random')
+        sampler_type = self.sampler.__class__.__name__.replace("Sampler", "").lower()
+        
+        # Format hyperparameters in note
+        hparams_note = (
+            f"lr={self.best_trial.params['learning_rate']:.2e}, "
+            f"buffer={self.best_trial.params['buffer_size']}, "
+            f"batch={self.best_trial.params['batch_size']}, "
+            f"starts={self.best_trial.params['learning_starts']}, "
+            f"gamma={self.best_trial.params['gamma']}, "
+            f"train_freq={self.best_trial.params['train_freq']}, "
+            f"target_update={self.best_trial.params['target_update_interval']}, "
+            f"exp_frac={self.best_trial.params['exploration_fraction']:.2f}, "
+            f"exp_eps={self.best_trial.params['exploration_final_eps']:.2f}"
+        )
+        
+        return {
+            "name": f"optuna_{sampler_type}_best",
+            "note": f"Auto-tuned Solaris via Optuna {sampler_type} | {hparams_note}",
             "timesteps": 300000,
             "learning_rate": self.best_trial.params["learning_rate"],
             "buffer_size": self.best_trial.params["buffer_size"],
@@ -767,26 +892,39 @@ class SolarisHyperparameterTuner:
             "exploration_final_eps": self.best_trial.params["exploration_final_eps"],
         }
 
-        return config
-
     def save_to_sweep_config(self, filepath="sweep_configs.json"):
-        """Save the best config to the sweep_configs.json file.
-
-        Args:
-            filepath: Path to the JSON file.
-        """
         config = self.get_best_config()
+        path = Path(filepath)
 
-        if os.path.exists(filepath):
-            with open(filepath, "r") as f:
-                data = json.load(f)
+        data = []
+        if path.exists():
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    data = [data]
+                elif not isinstance(data, list):
+                    raise ValueError(
+                        f"{filepath} must contain a JSON list or object, got "
+                        f"{type(data).__name__} instead."
+                    )
+            except json.JSONDecodeError:
+                backup_path = path.with_suffix(path.suffix + ".backup")
+                shutil.copy(path, backup_path)
+                print(
+                    f"Warning: failed to parse {filepath}; backed up original to "
+                    f"{backup_path}. Old data will be replaced by the new best config."
+                )
+                data = []
+
+        if any(isinstance(entry, dict) and entry.get("name") == config["name"] for entry in data):
+            print(f"Sweep config already contains entry {config['name']}; skipping duplicate append.")
         else:
-            data = []
+            data.append(config)
 
-        data.append(config)
-
-        with open(filepath, "w") as f:
+        with path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+        print(f"Successfully added best trial to {filepath}")
 
 
 if __name__ == "__main__":
