@@ -66,5 +66,17 @@
       51597
     ],
     "note": "Auto-tuned Solaris via Optuna tpe | lr=1.45e-04, buffer=10000, batch=32, starts=7972, gamma=0.95, train_freq=1, target_update=2090, exp_frac=0.20, exp_eps=0.04"
+  },
+  "optuna_tpe_best_replicate_2": {
+    "seeds": [
+      34181
+    ],
+    "note": "Auto-tuned Solaris via Optuna tpe | lr=1.45e-04, buffer=10000, batch=32, starts=7972, gamma=0.95, train_freq=1, target_update=2090, exp_frac=0.20, exp_eps=0.04"
+  },
+  "optuna_tpe_best_replicate_3": {
+    "seeds": [
+      80005
+    ],
+    "note": "Auto-tuned Solaris via Optuna tpe | lr=1.45e-04, buffer=10000, batch=32, starts=7972, gamma=0.95, train_freq=1, target_update=2090, exp_frac=0.20, exp_eps=0.04"
   }
 }
