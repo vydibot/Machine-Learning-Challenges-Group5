@@ -192,5 +192,5 @@ This video presents the Solaris Atari DQN project and walks through the agent de
 
 ### Link
 
-Add the video link here: `https://drive.google.com/file/d/1AiRy0wg7LL1oPYL17EXwwgzqK_-oUD2d/view?usp=sharing`
+Video link here: `https://drive.google.com/file/d/1AiRy0wg7LL1oPYL17EXwwgzqK_-oUD2d/view?usp=sharing`
 
