@@ -18,7 +18,7 @@ This repository contains a Reinforcement Learning project for training and evalu
 ### Option 1: Local virtual environment
 
 ```bash
-cd ./challenge1__5
+cd ./challenge1__-5-
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
