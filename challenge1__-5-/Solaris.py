@@ -677,6 +677,10 @@ def parse_args() -> argparse.Namespace:
         help="Number of replicates to run in replicate mode.",
     )
     parser.add_argument(
+        "--n-trials", type=int, default=10,
+        help="Number of trials to run in tune mode for Optuna optimization.",
+    )
+    parser.add_argument(
         "--sampler", choices=["tpe", "random"], default="tpe",
         help="Optuna sampler for tuning: 'tpe' for TPESampler, 'random' for RandomSampler.",
     )
