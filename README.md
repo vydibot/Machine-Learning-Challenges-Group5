@@ -18,7 +18,7 @@ This repository contains a Reinforcement Learning project for training and evalu
 ### Option 1: Local virtual environment
 
 ```bash
-cd ./challenge1__5
+cd ./challenge1__-5-
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -192,4 +192,5 @@ This video presents the Solaris Atari DQN project and walks through the agent de
 
 ### Link
 
-Video link: `https://drive.google.com/file/d/1AiRy0wg7LL1oPYL17EXwwgzqK_-oUD2d/view?usp=sharing`
+Add the video link here: `https://drive.google.com/file/d/1AiRy0wg7LL1oPYL17EXwwgzqK_-oUD2d/view?usp=sharing`
+
