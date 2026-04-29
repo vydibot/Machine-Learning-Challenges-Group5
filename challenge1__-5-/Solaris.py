@@ -27,7 +27,7 @@ Usage
   #   Each experiment uses the timesteps defined in its JSON entry.
   #   Override all at once with: --timesteps 500000
 
-  # Monitor all sweep runs simultaneously in TensorBoard
+  # Monitor all sweep runs simultaneously in TensorBoards
   python -m tensorboard.main --logdir logs/solaris/sweep --port 6006
 
   # Monitor the tuning runs in TensorBoard
