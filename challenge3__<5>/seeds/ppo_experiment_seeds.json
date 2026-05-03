@@ -1,0 +1,8 @@
+{
+  "default_ppo_solaris": {
+    "seeds": [
+      42
+    ],
+    "note": "PPO Solaris replicate"
+  }
+}

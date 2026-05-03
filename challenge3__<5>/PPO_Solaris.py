@@ -55,12 +55,15 @@ import torch.nn as nn
 import torch.optim as optim
 from gymnasium.wrappers import AtariPreprocessing, FrameStackObservation
 from torch.distributions import Categorical
+import ale_py
+gym.register_envs(ale_py)
 
 # Atari environment settings matching Solaris.py.
 ENV_ID = "ALE/Solaris-v5"
 N_STACK = 4
 SEEDS_DIR = Path("seeds")
 SEEDS_FILE = SEEDS_DIR / "ppo_experiment_seeds.json"
+
 CONFIG_FILE = Path("ppo_sweep_configs.json")
 DEFAULT_MODEL_PATH = Path("models/ppo_solaris")
 
@@ -146,7 +149,7 @@ def ensure_default_config_file() -> None:
 
 def make_env(env_id: str, seed: int = 0, render_mode: Optional[str] = None):
     """Build the ALE environment with the same preprocessing as Solaris.py."""
-    env = gym.make(env_id, render_mode=render_mode)
+    env = gym.make(env_id, render_mode=render_mode, frameskip=1)
     env = AtariPreprocessing(
         env,
         noop_max=30,
@@ -154,7 +157,7 @@ def make_env(env_id: str, seed: int = 0, render_mode: Optional[str] = None):
         screen_size=84,
         grayscale_obs=True,
         scale_obs=True,
-        grayscale_newaxis=True,
+        grayscale_newaxis=False,
     )
     env = FrameStackObservation(env, N_STACK)
     env.reset(seed=seed)
@@ -376,7 +379,7 @@ def train_ppo(
         obs_batch = torch.stack(obs_buf).to(device)
         act_batch = torch.stack(act_buf).to(device)
         logp_batch = torch.stack(logp_buf).to(device)
-        adv_batch = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        adv_batch = ((advantages - advantages.mean()) / (advantages.std() + 1e-8)).to(device)
         ret_batch = returns.to(device)
 
         # --- PPO update ---
