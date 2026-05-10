@@ -1,0 +1,17 @@
+[
+  {
+    "name": "default_ppo_solaris",
+    "note": "Initial PPO config based on the suggested search space for Solaris.",
+    "timesteps": 2000000,
+    "learning_rate": 0.00025,
+    "horizon": 1024,
+    "n_epochs": 6,
+    "batch_size": 128,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_eps": 0.2,
+    "ent_coef": 0.01,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5
+  }
+]

@@ -15,16 +15,16 @@ How it works (high level):
 Usage
 -----
   # Train with the default PPO config
-  python PPO_Solaris.py --mode train --model-path models/ppo_solaris
+  python Solaris.py --mode train --model-path models/ppo_solaris
 
   # Train a named experiment from the JSON config
-  python PPO_Solaris.py --mode train --experiment default_ppo_solaris --model-path models/ppo_solaris
+  python Solaris.py --mode train --experiment default_ppo_solaris --model-path models/ppo_solaris
 
   # Watch a trained policy play Solaris
-  python PPO_Solaris.py --mode play --model-path models/ppo_solaris --episodes 3
+  python Solaris.py --mode play --model-path models/ppo_solaris --episodes 3
 
   # Inspect the saved PPO checkpoint hyperparameters
-  python PPO_Solaris.py --mode inspect --model-path models/ppo_solaris
+  python Solaris.py --mode inspect --model-path models/ppo_solaris
 
   # Change the game by updating ENV_ID below.
 
@@ -45,6 +45,7 @@ import argparse
 import json
 import os
 import random
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -55,6 +56,8 @@ import torch.nn as nn
 import torch.optim as optim
 from gymnasium.wrappers import AtariPreprocessing, FrameStackObservation
 from torch.distributions import Categorical
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 import ale_py
 gym.register_envs(ale_py)
 
@@ -66,6 +69,7 @@ SEEDS_FILE = SEEDS_DIR / "ppo_experiment_seeds.json"
 
 CONFIG_FILE = Path("ppo_sweep_configs.json")
 DEFAULT_MODEL_PATH = Path("models/ppo_solaris")
+TENSORBOARD_LOG_DIR = Path("logs/ppo_solaris")
 
 
 def set_global_seed(seed: int) -> None:
@@ -275,6 +279,7 @@ def train_ppo(
     seed: int,
     hparams: Optional[Dict[str, Any]] = None,
     experiment_name: str = "default_ppo_solaris",
+    tensorboard_log: str = str(TENSORBOARD_LOG_DIR),
 ) -> float:
     """Train PPO on Solaris, save the model, and record the config and seed.
 
@@ -322,6 +327,10 @@ def train_ppo(
     model = AtariActorCritic(n_actions).to(device)
     optimizer = optim.Adam(model.parameters(), lr=hparams["learning_rate"])
 
+    run_name = f"{experiment_name}_seed_{seed}_{int(time.time())}"
+    run_dir = Path(tensorboard_log) / run_name
+    writer = SummaryWriter(log_dir=str(run_dir))
+
     obs, _ = env.reset(seed=seed)
     episode_return = 0.0
     all_returns: List[float] = []
@@ -359,6 +368,10 @@ def train_ppo(
 
             if done:
                 all_returns.append(episode_return)
+                # Learning curve: episode return versus environment steps.
+                writer.add_scalar("training/episode_return", episode_return, steps)
+                remaining = timesteps - steps
+                print(f"Step {steps}/{timesteps} (done: {steps}, remaining: {remaining}) | episode_return: {episode_return:.2f}")
                 episode_return = 0.0
                 obs, _ = env.reset()
 
@@ -383,6 +396,8 @@ def train_ppo(
         ret_batch = returns.to(device)
 
         # --- PPO update ---
+        policy_losses: List[float] = []
+        value_losses: List[float] = []
         permutation = torch.randperm(rollout_length)
         for _ in range(hparams["n_epochs"]):
             for start in range(0, rollout_length, hparams["batch_size"]):
@@ -404,11 +419,20 @@ def train_ppo(
                 nn.utils.clip_grad_norm_(model.parameters(), hparams["max_grad_norm"])
                 optimizer.step()
 
-        if steps % 100000 == 0 or steps == timesteps:
-            mean_return = float(np.mean(all_returns[-10:])) if all_returns else 0.0
-            print(f"step={steps}/{timesteps}  mean_last_10_returns={mean_return:.2f}")
+                policy_losses.append(policy_loss.item())
+                value_losses.append(value_loss.item())
 
+        mean_policy_loss = float(np.mean(policy_losses)) if policy_losses else 0.0
+        mean_value_loss = float(np.mean(value_losses)) if value_losses else 0.0
+        mean_return = float(np.mean(all_returns[-10:])) if all_returns else 0.0
+
+        writer.add_scalar("train/policy_loss", mean_policy_loss, steps)
+        writer.add_scalar("train/value_loss", mean_value_loss, steps)
+        writer.add_scalar("train/mean_return_10", mean_return, steps)
+
+    writer.close()
     env.close()
+    print(f"Training complete. Total steps: {steps}")
     save_model(model, model_path, {**hparams, "seed": seed})
     append_config(experiment_name, {**hparams, "timesteps": timesteps}, note="PPO Solaris run")
     record_seed(experiment_name, seed, note="PPO Solaris replicate")
@@ -459,6 +483,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--experiment", default="default_ppo_solaris", help="Experiment name for config and seed records.")
     parser.add_argument("--episodes", type=int, default=3, help="Number of episodes to play in play mode.")
+    parser.add_argument("--tensorboard-log", default=str(TENSORBOARD_LOG_DIR), help="Directory for TensorBoard logs.")
     return parser.parse_args()
 
 
@@ -481,6 +506,7 @@ def main() -> None:
             seed=args.seed,
             hparams=hparams,
             experiment_name=args.experiment,
+            tensorboard_log=args.tensorboard_log,
         )
         print(f"\nTraining complete. Mean return (last 10 episodes): {best_return:.2f}")
         print(f"Model saved to {args.model_path}.pth")
