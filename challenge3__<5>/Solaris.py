@@ -23,6 +23,9 @@ Usage
   # Run all experiments from the sweep config and keep the best model
   python Solaris.py --mode sweep --sweep-file ppo_sweep_configs.json --model-path models/ppo_solaris
 
+  # Run replicates of the best config with random seeds
+  python Solaris.py --mode replicate --n-replicates 3 --model-path models/ppo_solaris
+
   # Watch a trained policy play Solaris
   python Solaris.py --mode play --model-path models/ppo_solaris --episodes 3
 
@@ -536,6 +539,77 @@ def run_sweep(
     print(f"TensorBoard logs for all runs: {base_log_dir}/sweep/")
 
 
+def run_replicates(
+    sweep_path: str,
+    n_replicates: int,
+    base_log_dir: str,
+    model_base_path: str,
+) -> None:
+    """Run the best config from ppo_sweep_configs.json multiple times with different random seeds.
+
+    This is useful for validating the stability of the best hyperparameters found by sweep.
+    Each replicate uses a random seed and records it in experiment_seeds.json.
+
+    Args:
+        sweep_path:      Path to the JSON file containing experiment configs.
+        n_replicates:    Number of times to run the best config.
+        base_log_dir:    Root TensorBoard log directory.
+        model_base_path: Base path for saving replicate models (without .pth).
+    """
+    try:
+        with open(sweep_path) as f:
+            configs = json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        print(f"Error loading sweep file {sweep_path}: {e}")
+        print("Make sure to run a sweep first to generate configurations.")
+        return
+
+    # Ensure configs is a list
+    if isinstance(configs, dict):
+        configs = [configs]
+
+    if not configs:
+        print("No configs found in sweep file.")
+        return
+
+    # Assume the last config is the best
+    best_config = configs[-1]
+    best_name = best_config["name"]
+
+    print(f"Running {n_replicates} replicates of best config: {best_name}")
+    print(f"  {best_config.get('note', '')}")
+    print(f"{'='*60}")
+
+    for i in range(1, n_replicates + 1):
+        replicate_seed = random.randint(0, 100000)
+
+        experiment_name = f"{best_name}_replicate_{i}"
+
+        print(f"Replicate {i}/{n_replicates}: {experiment_name} (seed={replicate_seed})")
+
+        # Filter hparams
+        hparams = {k: v for k, v in best_config.items() if k not in ["name", "note"]}
+
+        model_path = f"{model_base_path}_replicate_{i}"
+        log_dir = f"{base_log_dir}/replicates/{experiment_name}"
+
+        timesteps = hparams.get("timesteps", 2000000)
+
+        score = train_ppo(
+            model_path=model_path,
+            timesteps=timesteps,
+            seed=replicate_seed,
+            hparams=hparams,
+            experiment_name=experiment_name,
+            tensorboard_log=log_dir,
+        )
+        print(f"  → final mean reward: {score:.2f}")
+
+    print(f"\n{'='*60}")
+    print(f"Replication complete. Models saved as {model_base_path}_replicate_1.pth etc.")
+    print(f"TensorBoard logs: {base_log_dir}/replicates/")
+
+
 def play_agent(model_path: str, episodes: int = 3, seed: int = 42) -> None:
     """Play a saved PPO agent in a rendered Atari window."""
     checkpoint_path = f"{model_path}.pth"
@@ -573,7 +647,7 @@ def parse_args() -> argparse.Namespace:
         description="Train, inspect, or play PPO on Atari Solaris.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--mode", choices=["train", "play", "inspect", "sweep"], required=True)
+    parser.add_argument("--mode", choices=["train", "play", "inspect", "sweep", "replicate"], required=True)
     parser.add_argument("--model-path", default=str(DEFAULT_MODEL_PATH), help="Model path (without .pth).")
     parser.add_argument("--timesteps", type=int, default=None, help="Total training environment steps.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
@@ -581,6 +655,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=3, help="Number of episodes to play in play mode.")
     parser.add_argument("--tensorboard-log", default=str(TENSORBOARD_LOG_DIR), help="Directory for TensorBoard logs.")
     parser.add_argument("--sweep-file", default="ppo_sweep_configs.json", help="Path to JSON file with experiment configs (used by --mode sweep).")
+    parser.add_argument("--n-replicates", type=int, default=3, help="Number of replicates for replicate mode.")
     return parser.parse_args()
 
 
@@ -592,6 +667,9 @@ def main() -> None:
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             configs = json.load(f)
+        # Ensure configs is a list
+        if isinstance(configs, dict):
+            configs = [configs]
         experiment = next((cfg for cfg in configs if cfg.get("name") == args.experiment), None)
         if experiment is not None:
             hparams = {k: v for k, v in experiment.items() if k not in {"name", "note"}}
@@ -623,6 +701,14 @@ def main() -> None:
             seed=args.seed,
             base_log_dir=args.tensorboard_log,
             best_model_path=args.model_path,
+        )
+
+    elif args.mode == "replicate":
+        run_replicates(
+            sweep_path=args.sweep_file,
+            n_replicates=args.n_replicates,
+            base_log_dir=args.tensorboard_log,
+            model_base_path=args.model_path,
         )
 
 

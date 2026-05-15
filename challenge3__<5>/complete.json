@@ -166,6 +166,54 @@
     "ent_coef": 0.005,
     "vf_coef": 1.0,
     "max_grad_norm": 1.0
+  },
+
+    {
+    "name": "ppo_solaris_gae_variance_reduction (Final choose model) 3 seeds expirment_replicate_1",
+    "timesteps": 2000000,
+    "learning_rate": 0.00025,
+    "horizon": 2048,
+    "n_epochs": 4,
+    "batch_size": 128,
+    "gamma": 0.995,
+    "gae_lambda": 0.97,
+    "clip_eps": 0.2,
+    "ent_coef": 0.01,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "note": "PPO Solaris run"
+  },
+  
+  {
+    "name": "ppo_solaris_gae_variance_reduction (Final choose model) 3 seeds expirment_replicate_2",
+    "timesteps": 2000000,
+    "learning_rate": 0.00025,
+    "horizon": 2048,
+    "n_epochs": 4,
+    "batch_size": 128,
+    "gamma": 0.995,
+    "gae_lambda": 0.97,
+    "clip_eps": 0.2,
+    "ent_coef": 0.01,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "note": "PPO Solaris run"
+  },
+
+  {
+    "name": "ppo_solaris_gae_variance_reduction (Final choose model) 3 seeds expirment_replicate_3",
+    "timesteps": 2000000,
+    "learning_rate": 0.00025,
+    "horizon": 2048,
+    "n_epochs": 4,
+    "batch_size": 128,
+    "gamma": 0.995,
+    "gae_lambda": 0.97,
+    "clip_eps": 0.2,
+    "ent_coef": 0.01,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "note": "PPO Solaris run"
   }
 
 ]

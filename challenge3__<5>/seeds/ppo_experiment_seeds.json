@@ -58,5 +58,23 @@
       45
     ],
     "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_gae_variance_reduction (Final choose model) 3 seeds expirment_replicate_1": {
+    "seeds": [
+      52372
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_gae_variance_reduction (Final choose model) 3 seeds expirment_replicate_2": {
+    "seeds": [
+      66064
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_gae_variance_reduction (Final choose model) 3 seeds expirment_replicate_3": {
+    "seeds": [
+      95921
+    ],
+    "note": "PPO Solaris replicate"
   }
 }
