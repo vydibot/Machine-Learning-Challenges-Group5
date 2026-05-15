@@ -20,11 +20,19 @@ Usage
   # Train a named experiment from the JSON config
   python Solaris.py --mode train --experiment default_ppo_solaris --model-path models/ppo_solaris
 
+  # Run all experiments from the sweep config and keep the best model
+  python Solaris.py --mode sweep --sweep-file ppo_sweep_configs.json --model-path models/ppo_solaris
+
   # Watch a trained policy play Solaris
   python Solaris.py --mode play --model-path models/ppo_solaris --episodes 3
 
   # Inspect the saved PPO checkpoint hyperparameters
   python Solaris.py --mode inspect --model-path models/ppo_solaris
+
+  # Monitor the tuning runs in TensorBoard
+  python -m tensorboard.main --logdir logs/ppo_solaris --port 6006
+
+  # Then open http://localhost:6006
 
   # Change the game by updating ENV_ID below.
 
@@ -58,6 +66,7 @@ from gymnasium.wrappers import AtariPreprocessing, FrameStackObservation
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+import shutil
 import ale_py
 gym.register_envs(ale_py)
 
@@ -440,6 +449,93 @@ def train_ppo(
     return float(np.mean(all_returns[-10:])) if all_returns else 0.0
 
 
+def run_sweep(
+    sweep_path: str,
+    default_timesteps: int,
+    seed: int,
+    base_log_dir: str,
+    best_model_path: str,
+) -> None:
+    """Run all experiments defined in a JSON config file and save the best model.
+
+    Each experiment uses the ``timesteps`` value from its JSON entry. If the
+    entry omits ``timesteps``, the value from ``default_timesteps`` is used.
+    TensorBoard logs for every run are written to
+    ``<base_log_dir>/sweep/<experiment_name>/`` so all runs are visible
+    together by pointing TensorBoard at ``<base_log_dir>/sweep``.
+
+    After all experiments finish, only the model with the highest mean final
+    episode reward is kept at ``best_model_path``. All intermediate models are
+    deleted to save disk space.
+
+    Args:
+        sweep_path:        Path to the JSON file containing experiment configs.
+        default_timesteps: Fallback timestep budget for experiments that do not
+                           define ``timesteps`` in their JSON entry.
+        seed:              Random seed applied to every experiment.
+        base_log_dir:      Root TensorBoard log directory.
+        best_model_path:   Where to save the winning model (without .pth).
+    """
+    with open(sweep_path) as f:
+        configs = json.load(f)
+
+    tmp_model_dir = Path("models") / "_ppo_sweep_tmp"
+    tmp_model_dir.mkdir(parents=True, exist_ok=True)
+
+    results: List[Tuple[str, float]] = []
+    total = len(configs)
+
+    for idx, cfg in enumerate(configs, start=1):
+        name = cfg.get("name", f"exp_{idx:02d}")
+        note = cfg.get("note", "")
+        # Per-experiment timestep budget; falls back to the default value.
+        exp_timesteps = cfg.get("timesteps", default_timesteps)
+
+        # Ensure each experiment gets a reproducible but different seed.
+        experiment_seed = seed + idx
+
+        print(f"Experiment {idx}/{total}: {name}  ({exp_timesteps:,} steps, seed={experiment_seed})")
+        if note:
+            print(f"  {note}")
+        print(f"{'='*60}")
+
+        # Build the hparams dict expected by train_ppo.
+        hparams = {k: v for k, v in cfg.items() if k not in {"name", "note", "timesteps"}}
+
+        model_path = str(tmp_model_dir / name)
+        log_dir = f"{base_log_dir}/sweep/{name}"
+
+        score = train_ppo(
+            model_path=model_path,
+            timesteps=exp_timesteps,
+            seed=experiment_seed,
+            hparams=hparams,
+            experiment_name=name,
+            tensorboard_log=log_dir,
+        )
+        results.append((name, score))
+        print(f"  → final mean reward: {score:.2f}")
+
+    # Summary
+    results.sort(key=lambda x: x[1], reverse=True)
+    best_name, best_score = results[0]
+
+    print(f"\n{'='*60}")
+    print("Sweep complete — results ranked by final mean reward:")
+    for rank, (name, score) in enumerate(results, start=1):
+        marker = "  BEST" if rank == 1 else ""
+        print(f"  {rank:2d}. {name:<35s}  {score:7.2f}{marker}")
+    print(f"{'='*60}")
+
+    # Save best, clean up 
+    Path(best_model_path).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(str(tmp_model_dir / f"{best_name}.pth"), f"{best_model_path}.pth")
+    shutil.rmtree(tmp_model_dir)
+
+    print(f"\nBest model ({best_name}, score={best_score:.2f}) saved into {best_model_path}.pth")
+    print(f"TensorBoard logs for all runs: {base_log_dir}/sweep/")
+
+
 def play_agent(model_path: str, episodes: int = 3, seed: int = 42) -> None:
     """Play a saved PPO agent in a rendered Atari window."""
     checkpoint_path = f"{model_path}.pth"
@@ -477,13 +573,14 @@ def parse_args() -> argparse.Namespace:
         description="Train, inspect, or play PPO on Atari Solaris.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--mode", choices=["train", "play", "inspect"], required=True)
+    parser.add_argument("--mode", choices=["train", "play", "inspect", "sweep"], required=True)
     parser.add_argument("--model-path", default=str(DEFAULT_MODEL_PATH), help="Model path (without .pth).")
-    parser.add_argument("--timesteps", type=int, default=2000000, help="Total training environment steps.")
+    parser.add_argument("--timesteps", type=int, default=None, help="Total training environment steps.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--experiment", default="default_ppo_solaris", help="Experiment name for config and seed records.")
     parser.add_argument("--episodes", type=int, default=3, help="Number of episodes to play in play mode.")
     parser.add_argument("--tensorboard-log", default=str(TENSORBOARD_LOG_DIR), help="Directory for TensorBoard logs.")
+    parser.add_argument("--sweep-file", default="ppo_sweep_configs.json", help="Path to JSON file with experiment configs (used by --mode sweep).")
     return parser.parse_args()
 
 
@@ -518,6 +615,15 @@ def main() -> None:
 
     elif args.mode == "inspect":
         inspect_model(model_path=args.model_path)
+
+    elif args.mode == "sweep":
+        run_sweep(
+            sweep_path=args.sweep_file,
+            default_timesteps=args.timesteps or 2000000,
+            seed=args.seed,
+            base_log_dir=args.tensorboard_log,
+            best_model_path=args.model_path,
+        )
 
 
 if __name__ == "__main__":

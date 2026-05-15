@@ -4,5 +4,59 @@
       42
     ],
     "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_aggressive_learning": {
+    "seeds": [
+      43
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_long_horizon_max": {
+    "seeds": [
+      44
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_gae_variance_reduction": {
+    "seeds": [
+      45
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_baseline": {
+    "seeds": [
+      46
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_high_exploration": {
+    "seeds": [
+      47
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_critic_focus": {
+    "seeds": [
+      48
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_large_batch_robust": {
+    "seeds": [
+      43
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_stable_updates": {
+    "seeds": [
+      44
+    ],
+    "note": "PPO Solaris replicate"
+  },
+  "ppo_solaris_deep_memory_strategy": {
+    "seeds": [
+      45
+    ],
+    "note": "PPO Solaris replicate"
   }
 }
