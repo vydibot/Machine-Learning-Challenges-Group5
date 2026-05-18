@@ -1,0 +1,26 @@
+{
+  "timestamp": "/home/vydi/ML Challenges/challenge3__<5>/variance_analysis",
+  "dqn": {
+    "agent": "DQN",
+    "final_performance_mean": 1301.1999918619792,
+    "final_performance_std": 163.1059314016539,
+    "training_stability_auc": 1332.7612319139132,
+    "sample_efficiency_steps": 2921.6666666666665,
+    "avg_loss_final": 0.003065228787212012,
+    "avg_episode_length_final": 8589.173177083334
+  },
+  "ppo": {
+    "agent": "PPO",
+    "final_performance_mean": 3535.3333333333335,
+    "final_performance_std": 1826.8665340777725,
+    "training_stability_auc": 2700.635766024409,
+    "sample_efficiency_steps": 426666.6666666667,
+    "avg_loss_final": 0.0008298583852592856,
+    "avg_episode_length_final": 2534.0792196591697
+  },
+  "comparison": {
+    "dqn_better_performance": false,
+    "dqn_better_stability": false,
+    "dqn_better_sample_efficiency": true
+  }
+}
