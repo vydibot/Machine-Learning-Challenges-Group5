@@ -108,5 +108,23 @@
       43
     ],
     "note": "This is the best model from the Optuna TPE sweep"
+  },
+  "optuna_tpe_best(2M TIMESTEPS 3 seeds experiment)_replicate_1": {
+    "seeds": [
+      3706
+    ],
+    "note": "This is the best model from the Optuna TPE sweep"
+  },
+  "optuna_tpe_best(2M TIMESTEPS 3 seeds experiment)_replicate_2": {
+    "seeds": [
+      60906
+    ],
+    "note": "This is the best model from the Optuna TPE sweep"
+  },
+  "optuna_tpe_best(2M TIMESTEPS 3 seeds experiment)_replicate_3": {
+    "seeds": [
+      65492
+    ],
+    "note": "This is the best model from the Optuna TPE sweep"
   }
 }

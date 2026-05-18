@@ -1,6 +1,6 @@
 [
         {
-    "name": "optuna_tpe_best(2M TIMESTEPS challenge 2 )",
+    "name": "optuna_tpe_best(2M TIMESTEPS 3 seeds experiment)",
     "note": "This is the best model from the Optuna TPE sweep",
     "timesteps": 2000000,
     "learning_rate": 0.00014490173945283679,

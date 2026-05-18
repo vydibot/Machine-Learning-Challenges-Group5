@@ -333,7 +333,7 @@ def train_ppo(
         hparams = default_hparams
 
     set_global_seed(seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0")  # Force GPU 0
     env = make_env(ENV_ID, seed=seed, render_mode=None)
     n_actions = env.action_space.n
     model = AtariActorCritic(n_actions).to(device)
