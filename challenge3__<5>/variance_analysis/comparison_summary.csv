@@ -1,0 +1,10 @@
+Metric,DQN,PPO
+Final Performance (Mean),1905222.60,1901558.86
+Final Performance (Std),0.00,0.00
+Final Performance (Min),1905222.60,1901558.86
+Final Performance (Max),1905222.60,1901558.86
+Sample Efficiency (Steps),1777774970,1778835646
+Sample Efficiency (Std),0,9847
+Training Stability (AUC),1010941.89,1024502.07
+Training Stability (Std),0.00,5484.86
+Performance Threshold (75%ile),1999631.00,2000000.00
