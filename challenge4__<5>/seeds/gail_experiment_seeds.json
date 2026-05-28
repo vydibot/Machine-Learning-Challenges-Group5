@@ -1,0 +1,10 @@
+{
+  "gail_from_best_ppo": {
+    "seeds": [],
+    "note": "GAIL trained from best PPO checkpoint (high-quality demos) - seeds generated randomly"
+  },
+  "gail_from_mid_ppo": {
+    "seeds": [],
+    "note": "GAIL trained from mid-training PPO checkpoint (diverse but imperfect demos) - seeds generated randomly"
+  }
+}
