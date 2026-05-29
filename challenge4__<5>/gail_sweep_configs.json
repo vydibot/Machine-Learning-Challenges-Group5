@@ -57,6 +57,7 @@
     "max_grad_norm": 0.5,
     "demo_steps": 50000,
     "demo_quality": "medium",
-    "ppo_checkpoint_source": "ppo_best/ppo_solaris_replicate_1.pth"
+    "ppo_checkpoint_source": "ppo_best/ppo_solaris_replicate_1.pth",
+    "seed": 255258074
   }
 ]

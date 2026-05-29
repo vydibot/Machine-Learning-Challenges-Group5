@@ -12,7 +12,9 @@
     "note": "GAIL trained from best PPO checkpoint (high-quality demos) - seeds generated randomly"
   },
   "gail_from_mid_ppo": {
-    "seeds": [],
+    "seeds": [
+      255258074
+    ],
     "note": "GAIL trained from mid-training PPO checkpoint (diverse but imperfect demos) - seeds generated randomly"
   }
 }
