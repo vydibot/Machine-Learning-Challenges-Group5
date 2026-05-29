@@ -36,7 +36,8 @@
     "max_grad_norm": 0.5,
     "demo_steps": 50000,
     "demo_quality": "high",
-    "ppo_checkpoint_source": "ppo_best/ppo_solaris_replicate_1.pth"
+    "ppo_checkpoint_source": "ppo_best/ppo_solaris_replicate_1.pth",
+    "seed": 772308952
   },
   {
     "name": "gail_from_mid_ppo",

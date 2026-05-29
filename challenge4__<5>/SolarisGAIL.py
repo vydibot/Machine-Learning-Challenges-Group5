@@ -539,6 +539,7 @@ def train_gail(
     max_grad_norm: float = 0.5,
     seed: Optional[int] = None,
     experiment_name: str = "gail_baseline",
+    model_path: str = str(DEFAULT_MODEL_PATH),
     tensorboard_log: str = str(TENSORBOARD_LOG_DIR),
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
 ) -> Tuple[AtariActorCritic, GAILDiscriminator, List[float]]:
@@ -762,8 +763,11 @@ def train_gail(
     print(f"{'='*70}\n")
     
     # Save model
-    Path(model_path := str(DEFAULT_MODEL_PATH)).parent.mkdir(parents=True, exist_ok=True)
-    save_model(policy, model_path, {
+    base_path = Path(model_path)
+    run_stamp = int(time.time() * 1000)
+    unique_model_path = base_path.parent / f"{base_path.name}_{experiment_name}_seed_{seed}_{run_stamp}"
+    unique_model_path.parent.mkdir(parents=True, exist_ok=True)
+    save_model(policy, str(unique_model_path), {
         "total_timesteps": total_timesteps,
         "horizon": horizon,
         "n_ppo_epochs": n_ppo_epochs,
@@ -779,7 +783,7 @@ def train_gail(
         "max_grad_norm": max_grad_norm,
         "seed": seed,
     })
-    
+
     append_config(experiment_name, {
         "total_timesteps": total_timesteps,
         "horizon": horizon,
@@ -1006,6 +1010,7 @@ def main() -> None:
                 demos_path=args.demos,
                 **hparams,
                 experiment_name=args.experiment,
+                model_path=args.model_path,
                 tensorboard_log=args.tensorboard_log,
                 seed=args.seed,
             )
