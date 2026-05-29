@@ -71,13 +71,16 @@ TENSORBOARD_LOG_DIR = Path("logs/gail_solaris")
 DEMOS_DIR = Path("demonstrations")
 
 
-def set_global_seed(seed: int) -> None:
-    """Set all relevant PRNGs for reproducibility."""
+def set_global_seed(seed: Optional[int]) -> int:
+    """Set all relevant PRNGs for reproducibility and return the resolved seed."""
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    return seed
 
 
 def record_seed(experiment_name: str, seed: int, note: Optional[str] = None) -> None:
@@ -364,7 +367,7 @@ def collect_demonstrations(
     Returns:
         Dictionary with 'obs' and 'acts' numpy arrays
     """
-    set_global_seed(seed)
+    seed = set_global_seed(seed)
     
     env = make_env(env_id, seed=seed, render_mode=None)
     n_actions = env.action_space.n
