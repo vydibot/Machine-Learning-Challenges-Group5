@@ -159,6 +159,30 @@ def ensure_default_config_file() -> None:
         json.dump(config, f, indent=2)
 
 
+def ensure_default_seed_file() -> None:
+    """Create the seed registry with all known experiments if it does not exist."""
+    if SEEDS_FILE.exists():
+        return
+
+    SEEDS_DIR.mkdir(parents=True, exist_ok=True)
+    seeds = {
+        "gail_baseline": {
+            "seeds": [],
+            "note": "GAIL baseline experiment - seeds generated randomly",
+        },
+        "gail_from_best_ppo": {
+            "seeds": [],
+            "note": "GAIL trained from best PPO checkpoint (high-quality demos) - seeds generated randomly",
+        },
+        "gail_from_mid_ppo": {
+            "seeds": [],
+            "note": "GAIL trained from mid-training PPO checkpoint (diverse but imperfect demos) - seeds generated randomly",
+        },
+    }
+    with open(SEEDS_FILE, "w", encoding="utf-8") as f:
+        json.dump(seeds, f, indent=2)
+
+
 def make_env(env_id: str, seed: int = 0, render_mode: Optional[str] = None):
     """Build the ALE environment with identical preprocessing to Challenge 3."""
     env = gym.make(env_id, render_mode=render_mode, frameskip=1)
@@ -922,6 +946,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     ensure_default_config_file()
+    ensure_default_seed_file()
 
     if args.mode == "collect-demos":
         if not args.checkpoint_path:

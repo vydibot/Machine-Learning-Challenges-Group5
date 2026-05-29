@@ -1,4 +1,8 @@
 {
+  "gail_baseline": {
+    "seeds": [],
+    "note": "GAIL baseline experiment - seeds generated randomly"
+  },
   "gail_from_best_ppo": {
     "seeds": [],
     "note": "GAIL trained from best PPO checkpoint (high-quality demos) - seeds generated randomly"
