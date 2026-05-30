@@ -27,7 +27,7 @@ Usage
   python Solaris.py --mode replicate --n-replicates 3 --model-path models/ppo_solaris
 
   # Watch a trained policy play Solaris
-  python Solaris.py --mode play --model-path models/ppo_solaris --episodes 3
+  python Solaris.py --mode play --model-path models/ppo_solaris_replicate_1 --episodes 3
 
   # Inspect the saved PPO checkpoint hyperparameters
   python Solaris.py --mode inspect --model-path models/ppo_solaris
@@ -139,9 +139,17 @@ def append_config(experiment_name: str, config: Dict[str, Any], note: Optional[s
 
 
 def ensure_default_config_file() -> None:
-    """Create the base config file for PPO if it does not exist."""
+    """Create or repair the base config file for PPO if needed."""
     if CONFIG_FILE.exists():
-        return
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                configs = json.load(f)
+            if not isinstance(configs, list):
+                raise ValueError("Config file must contain a JSON list.")
+            return
+        except (json.JSONDecodeError, ValueError, FileNotFoundError):
+            print(f"Warning: {CONFIG_FILE} is missing or invalid. Recreating default config.")
+
     config = [
         {
             "name": "default_ppo_solaris",
@@ -479,8 +487,11 @@ def run_sweep(
         base_log_dir:      Root TensorBoard log directory.
         best_model_path:   Where to save the winning model (without .pth).
     """
-    with open(sweep_path) as f:
-        configs = json.load(f)
+    try:
+        with open(sweep_path, "r", encoding="utf-8") as f:
+            configs = json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        raise RuntimeError(f"Could not load sweep config {sweep_path}: {e}") from e
 
     tmp_model_dir = Path("models") / "_ppo_sweep_tmp"
     tmp_model_dir.mkdir(parents=True, exist_ok=True)
@@ -665,14 +676,19 @@ def main() -> None:
 
     hparams = None
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            configs = json.load(f)
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                configs = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"Warning: could not parse {CONFIG_FILE}: {e}. Using defaults.")
+            configs = []
         # Ensure configs is a list
         if isinstance(configs, dict):
             configs = [configs]
-        experiment = next((cfg for cfg in configs if cfg.get("name") == args.experiment), None)
-        if experiment is not None:
-            hparams = {k: v for k, v in experiment.items() if k not in {"name", "note"}}
+        if isinstance(configs, list):
+            experiment = next((cfg for cfg in configs if cfg.get("name") == args.experiment), None)
+            if experiment is not None:
+                hparams = {k: v for k, v in experiment.items() if k not in {"name", "note"}}
 
     if args.mode == "train":
         best_return = train_ppo(
