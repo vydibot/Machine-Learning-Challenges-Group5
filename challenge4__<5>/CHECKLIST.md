@@ -107,8 +107,13 @@ python SolarisGAIL.py --mode train-gail \
 
 ## Summary - When GAIL Added Value over Pure RL 
 
-Solaris-v5 is a dense-reward Atari game where PPO achieved 4764.00 mean return compared to GAIL's 2064.00—a 56.7% performance gap. While direct RL excels on this environment, GAIL's value proposition emerges in fundamentally different reward structures. On Solaris-v5, environment rewards provide continuous, immediate guidance that PPO exploits efficiently through on-policy optimization. GAIL, by contrast, optimizes for occupancy-measure matching—learning only what the demonstration policy shows, without discovering superior strategies beyond that distribution. This fundamental misalignment explains GAIL's underperformance here. However, GAIL would add substantial value in sparse-reward environments (e.g., Montezuma's Revenge, PrivateEye) where environment signals are scarce. In those settings, expert demonstrations provide crucial guidance unavailable through random exploration, and occupancy-measure matching becomes an advantage rather than a limitation. Our ablation confirms demonstration quality matters: best PPO demos achieved 2064.00 vs mid PPO at 1938.00 (6.5% improvement), while the discriminator maintained 99.22% accuracy—highly informative throughout training. For Solaris-v5 specifically, direct RL beats imitation learning due to dense rewards. The takeaway: algorithm choice depends critically on reward structure. Dense rewards favor direct RL; sparse rewards favor imitation learning with expert demonstrations.
+In Solaris-v5, direct reinforcement learning (PPO) significantly outperforms imitation learning (GAIL), achieving 4764 points compared to 2064 points. This 56.7% difference is due to fundamental environmental characteristics.
 
+Solaris-v5 features a dense reward structure, providing continuous feedback from the environment. PPO, an on-policy optimization algorithm, efficiently exploits this immediate information to iteratively refine its policy. In contrast, GAIL optimizes the matching of occupancy measures, limiting itself to reproducing patterns present in demonstrations without exploring superior strategies.
+
+Experiments demonstrated that the quality of the demonstrations is relevant: optimal PPO rewards reached 2064 points versus 1938 for suboptimal PPO demonstrations (a 6.5% improvement). The discriminator maintained 99.22% accuracy during training.
+
+In conclusion, the performance of these algorithms depends on the reward structure. In Solaris-v5, the availability of dense rewards favors direct learning. GAIL would be superior in environments with scarce rewards, where expert demonstrations provide essential support.
 ## Files Generated
 
 - `comparison_dqn_ppo_gail.ipynb` - Full analysis
