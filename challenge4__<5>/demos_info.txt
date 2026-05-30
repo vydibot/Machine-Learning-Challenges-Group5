@@ -1,0 +1,19 @@
+DEMONSTRATION DATASET - Challenge 4
+
+Source: PPO (Challenge 3, replicate 2, seed 66064)
+File: demonstrations/demos_best_ppo.npz
+Size: 50,000 state-action pairs
+Format: NumPy compressed (.npz)
+
+
+
+Demo Quality:
+- PPO mean return: 4406.0 ± ~500
+- GAIL achieves ~2064.0 (43% of PPO)
+- Discriminator accuracy: 99.22% (very informative)
+- Better demos improve GAIL by 6.5% (best vs mid)
+
+Notes:
+
+- Same preprocessing as Challenge 3
+
